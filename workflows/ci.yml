@@ -1,0 +1,72 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Обновлено до актуальной версии v4
+    - uses: actions/checkout@v4 
+    
+    - name: Set up Python
+      # Обновлено до актуальной версии v5
+      uses: actions/setup-python@v5
+      with:
+        # Фиксируем конкретную версию Python (3.10), а не 3.x
+        python-version: '3.10' 
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # ФИКСИРУЕМ ТОЧНЫЕ ВЕРСИИ БИБЛИОТЕК для воспроизводимости
+        pip install scikit-learn==1.3.2 numpy==1.26.2 pandas==2.1.4 joblib==1.3.2
+        
+    - name: Run pipeline
+      run: |
+        # Запускаем именно ваш файл ml_pipeline.py, а не конструкцию через python -c
+        python ml_pipeline.py
+        
+    - name: Make pipeline reproducible
+      run: |
+        echo "🛠️ Делаем пайплайн воспроизводимым: фиксируем артефакты (модель + метрики)..."
+        python -c "
+        import joblib
+        import json
+        from sklearn.datasets import load_iris
+        from sklearn.model_selection import train_test_split
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.metrics import accuracy_score
+
+        # Воспроизводим процесс с жестко заданными гиперпараметрами
+        iris = load_iris(); X = iris.data; y = iris.target
+        hyperparameters = {'n_estimators': 100, 'random_state': 42}
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        model = RandomForestClassifier(**hyperparameters)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+
+        # 1. Сохраняем саму модель (сериализация), чтобы её можно было развернуть
+        joblib.dump(model, 'model.joblib')
+        
+        # 2. Сохраняем метрики и параметры в формат JSON для логирования
+        metrics = {
+            'accuracy': float(accuracy),
+            'parameters': hyperparameters
+        }
+        with open('metrics.json', 'w') as f:
+            json.dump(metrics, f, indent=4)
+            
+        print('✅ Модель и метрики успешно сериализованы.')
+        "
+
+    - name: Upload ML artifacts
+      # Сохраняем артефакты в интерфейсе GitHub Actions
+      uses: actions/upload-artifact@v4
+      with:
+        name: ml-reproducible-artifacts
+        path: |
+          model.joblib
+          metrics.json
