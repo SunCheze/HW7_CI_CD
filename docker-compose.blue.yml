@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ml-service-blue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml_service_blue_stable
+    # Так как скрипт отрабатывает и завершается (выдает accuracy), 
+    # используем restart: "no", иначе Docker будет бесконечно перезапускать контейнер.
+    restart: "no" 
+    environment:
+      - ENVIRONMENT=production-blue
